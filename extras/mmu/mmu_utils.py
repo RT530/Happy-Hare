@@ -48,6 +48,7 @@ class MmuError(Exception):
 # -----------------------------------------------------------------------------------------------------------
 
 _DELETED = object() # Journal sentinel: "this key must not exist on disk"
+_UNKNOWN = object() # "Cannot tell what naming the saved data uses" - never migrate on a guess
 
 
 class SaveVariableManager:
@@ -99,8 +100,91 @@ class SaveVariableManager:
                 "If not, add this line and restart"
             )
 
+        # Record this boot's naming only after migrating, so the markers describe where
+        # the data actually ended up.
+        self._migrate_unit_namespace()
+        self._record_naming_markers()
+
         self.printer.register_event_handler("klippy:ready", self.handle_ready)
         self.printer.register_event_handler("klippy:disconnect", self.handle_disconnect)
+
+
+    def _saved_namespace(self):
+        """
+        The namespace saved data currently sits under, or None if it is stored unnamed.
+
+        Derived from the two markers written on every boot rather than from the shape of
+        the keys, which cannot be read reliably: "mmu_statistics_gate_3" is per-unit while
+        "mmu_statistics_swaps" is not.
+        """
+        if VARS_MMU_BARE_UNIT_NAMES not in self.save_variables.allVariables:
+            return _UNKNOWN                      # Pre-dates the markers; nothing to compare
+        if self.save_variables.allVariables.get(VARS_MMU_BARE_UNIT_NAMES):
+            return None
+        previous_units = self.save_variables.allVariables.get(VARS_MMU_UNIT_NAMES) or []
+        return previous_units[0] if len(previous_units) == 1 else _UNKNOWN
+
+
+    def _migrate_unit_namespace(self):
+        """
+        Move a single unit's saved data across when its variable naming changes.
+
+        A single unit has no name to disambiguate, so its data is stored unnamed
+        ("mmu_bowden_lengths"); with more than one unit each is stored under its own name
+        ("mmu_unit0_bowden_lengths"). Anything that changes which of those applies -
+        turning bare_unit_names off, collapsing a multi-unit install back to one unit,
+        renaming the unit - would otherwise leave every calibrated value stranded under a
+        name nothing looks up any more, and the MMU would come back reporting itself
+        uncalibrated with the data still sitting in mmu_vars.cfg.
+
+        Only single-unit machines are migrated: with two or more units there is no single
+        answer to which unit inherits unnamed data.
+        """
+        if self.mmu_machine.num_units != 1:
+            return
+
+        old = self._saved_namespace()
+        new = None if self.mmu_machine.bare_unit_names else self.mmu_machine.unit_names[0]
+        if old is _UNKNOWN or old == new:
+            return
+
+        renames = {}
+        for variable in VARS_MMU_PER_UNIT:
+            renames[self._apply_namespace(variable, old)] = self._apply_namespace(variable, new)
+        for prefix in VARS_MMU_PER_UNIT_PREFIXES:
+            old_prefix = self._apply_namespace(prefix, old)
+            new_prefix = self._apply_namespace(prefix, new)
+            for key in self.save_variables.allVariables:
+                if key.startswith(old_prefix):
+                    renames[key] = new_prefix + key[len(old_prefix):]
+
+        moved = 0
+        for old_key, new_key in renames.items():
+            if old_key == new_key or old_key not in self.save_variables.allVariables:
+                continue
+            # Journalled, not written: physical writes are refused until klippy:ready,
+            # whose flush picks these up along with everything else staged at startup.
+            self.set(new_key, self.save_variables.allVariables[old_key])
+            self.delete(old_key)
+            moved += 1
+
+        if moved:
+            logging.info(
+                "MMU: Moved %d saved value(s) to match this machine's variable naming (%s -> %s)"
+                % (moved, "unnamed" if old is None else "'%s'" % old,
+                   "unnamed" if new is None else "'%s'" % new)
+            )
+
+
+    def _record_naming_markers(self):
+        """
+        Record how this boot names saved variables, for the next boot to compare against.
+
+        Both are stored unprefixed themselves (like the revision var) so they stay
+        readable whichever naming is in force.
+        """
+        self.save_variables.allVariables[VARS_MMU_BARE_UNIT_NAMES] = self.mmu_machine.bare_unit_names
+        self.save_variables.allVariables[VARS_MMU_UNIT_NAMES] = list(self.mmu_machine.unit_names)
 
 
     def handle_ready(self):
@@ -129,10 +213,28 @@ class SaveVariableManager:
     def namespace(self, variable, namespace):
         """
         Return a variable name namespaced to an MMU unit (if provided).
+
+        Skipped when the install-time 'bare_unit_names' option is set. MmuMachine forces that
+        flag off whenever more than one unit is configured, so a genuine multi-unit machine
+        always falls through to the namespaced behavior below and its units cannot collide on
+        one shared set of bare names.
         """
-        if namespace is not None:
-            return variable.replace("mmu_", "mmu_%s_" % namespace)
-        return variable
+        if self.mmu_machine.bare_unit_names:
+            return variable
+        return self._apply_namespace(variable, namespace)
+
+
+    @staticmethod
+    def _apply_namespace(variable, namespace):
+        """
+        Name a variable under a given namespace, regardless of the machine's own naming.
+
+        Kept separate from namespace() because migration has to be able to build names in
+        the naming it is moving FROM, which is by definition not the one in force.
+        """
+        if namespace is None:
+            return variable
+        return variable.replace("mmu_", "mmu_%s_" % namespace)
 
 
     @staticmethod

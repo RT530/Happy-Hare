@@ -294,7 +294,7 @@ class TestNonGateInsertValidation(unittest.TestCase):
         self.hh = session('3ms')
         self.hh.boot()
         self.assertEqual(self.hh.errors, [], 'bootup was not clean')
-        self.sensor_name = 'default:extruder'
+        self.sensor_name = 'extruder'
 
     def tearDown(self):
         self.hh.close()

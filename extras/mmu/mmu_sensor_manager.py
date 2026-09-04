@@ -338,6 +338,13 @@ class MmuSensorManager:
                 return self.get_prefixed_sensor_name(endstop_name, mmu_unit.buffer.name)
             return endstop_name
 
+        # An unnamed single unit registers these three without a prefix, so resolving to a
+        # prefixed name here would look up a sensor that does not exist. This function and
+        # MmuEncoder/MmuToolheadWrapper have to agree on what the sensors are called.
+        if self.mmu_machine.bare_unit_names and endstop_name in [
+                SENSOR_ENCODER, SENSOR_EXTRUDER_ENTRY, SENSOR_TOOLHEAD]:
+            return endstop_name
+
         # These have form: "<encoderName>:genericName" (encoder is optional, may not be fitted)
         if endstop_name in [SENSOR_ENCODER]:
             if mmu_unit.encoder:

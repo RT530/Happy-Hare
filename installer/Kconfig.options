@@ -31,6 +31,7 @@
 #   PARAM_FILAMENT_RECOVERY_ON_PAUSE
 #   PARAM_RETRY_TOOL_CHANGE_ON_ERROR
 #   PARAM_BYPASS_AUTOLOAD
+#   PARAM_BARE_UNIT_NAMES
 
 menu "Software Options"
   help
@@ -351,6 +352,21 @@ menu "Software Options"
     depends on MMU_HAS_SENSOR_EXTRUDER
     help
       If extruder sensor fitted this controls the automatic loading of extruder for bypass operation
+
+  config PARAM_BARE_UNIT_NAMES
+    boolint "Leave this single unit unnamed in variables and sensor names?"
+    default 1
+    depends on !MULTI_UNIT
+    help
+      A unit name only exists to tell several units apart, so with just one there is
+      nothing to tell apart and it is left out: saved variables are stored as
+      "mmu_bowden_lengths" rather than "mmu_<unit>_bowden_lengths", and the encoder and
+      extruder entry sensors show up as "Encoder" and "Extruder" rather than
+      "Unit0:encoder" and "Unit0:extruder".
+      Turn this off to keep the unit name in both, matching how a multi-unit machine
+      stores things. Saved data is moved across either way, so switching this is safe.
+      Only offered for single-unit installs - a real multi-unit machine always needs the
+      name to keep each unit's data and sensors distinct.
 
 
 # -------------------------------------

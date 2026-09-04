@@ -93,6 +93,28 @@ class MmuMachine:
         self.unit_names = list(config.getlist('units'))
         self.num_units = len(self.unit_names)
 
+        # Read here, ahead of unit construction below, so MmuEncoder/MmuToolheadWrapper can
+        # see it while naming their sensors; self.params (which also carries install options)
+        # isn't built until after the unit loop because it needs the final num_gates count.
+        #
+        # Defaults OFF despite the installer defaulting it ON for a single unit: the option is
+        # only written for single-unit machines, so an absent setting means either multi-unit
+        # (where it must be off) or a config predating it (which is still storing names).
+        #
+        # The installer only offers this for a single unit ("depends on !MULTI_UNIT"), but the
+        # setting is enforced here rather than trusted from there: mmu.cfg is a hand-editable
+        # file, and adding a second unit to 'units' above is a one-line edit that would
+        # otherwise leave every unit sharing one set of unprefixed variable and sensor names.
+        self.bare_unit_names = bool(config.getint('bare_unit_names', 0, minval=0, maxval=1))
+        if self.bare_unit_names and self.num_units > 1:
+            logging.warning(
+                "MMU: Ignoring 'bare_unit_names' in [mmu_machine] - it drops the unit name from "
+                "saved variables and sensor names, which only works with a single unit, but %d "
+                "are configured (%s). Remove the setting to silence this."
+                % (self.num_units, ", ".join(self.unit_names))
+            )
+            self.bare_unit_names = False
+
         self.num_gates = 0           # Total number gates on system
         self.units = []              # Unit by index
         self.unit_by_name = {}       # Unit lookup by name
