@@ -1,0 +1,45 @@
+# Don't open a PR straight from this branch's fork to upstream - the sync commits
+# would show up in the diff. Branch from upstream/main instead: see
+# 'git fetch upstream main && git checkout -b my-fix upstream/main'.
+
+name: Sync with upstream (moggieuk/Happy-Hare)
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # daily
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    # guards against this ever running as upstream's own workflow (e.g. if this file
+    # were merged into moggieuk/Happy-Hare by any path) - it would otherwise try to add
+    # itself as its own "upstream" remote and push to its own default branch
+    if: github.repository != 'moggieuk/Happy-Hare'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/moggieuk/Happy-Hare.git
+          git fetch upstream main
+
+      - name: Merge upstream/main into main
+        run: |
+          git merge upstream/main --no-edit
+
+      - name: Push
+        run: |
+          git push origin main
