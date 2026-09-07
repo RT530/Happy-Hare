@@ -501,6 +501,8 @@ class TestEveryBootableProfile(unittest.TestCase):
             'neopixel:_unit0_gate%d_leds (5)' % gate for gate in range(5)])
         self.assertEqual(default_leds['exit_leds'].splitlines(), [
             'neopixel:_unit0_gate%d_leds (1,2,3,4)' % gate for gate in range(5)])
+        self.assertNotIn('entry_led_counts', default_leds)
+        self.assertNotIn('exit_led_counts', default_leds)
         for gate in range(5):
             chain = dict(default_parser.items(
                 'neopixel _unit0_gate%d_leds' % gate))
@@ -686,6 +688,14 @@ class TestMultiUnitMachine(unittest.TestCase):
         unit0 = {u.name: u for u in self.hh.mmu.mmu_machine.units}['unit0']
         self.assertEqual(unit0.nfc_reader, 'unit0_nfc')
         self.assertEqual(unit0.nfc_readers, [])
+
+    def test_vivid_custom_environment_sensor_is_not_generated_twice(self):
+        from test.hh import cfg, profiles
+        rendered = cfg.render(profiles.get('ercf_vvd'))
+        hardware = rendered['config/base/mmu_hardware_unit1.cfg']
+        self.assertEqual(
+            hardware.count('[temperature_sensor unit1_env_left]'),
+            1)
 
     def test_filament_heater_resolves(self):
         """
