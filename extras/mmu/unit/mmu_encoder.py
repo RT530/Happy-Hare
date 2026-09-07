@@ -85,7 +85,13 @@ class MmuEncoder:
         self.flowrate_samples = config.getint('flowrate_samples', 20, minval=5)
 
         # Create virtual endstop (for giggles and experimental use)
-        endstop_sensor_name = f"{self.name}:{SENSOR_ENCODER}"
+        # Single-unit printer customization: drop the "<unit>:" prefix only when there's
+        # genuinely one unit - with 2+ units it's still required to keep each unit's sensor
+        # name unique (this repo's own multi-unit test fixtures rely on that).
+        if self.mmu_machine.num_units <= 1:
+            endstop_sensor_name = SENSOR_ENCODER
+        else:
+            endstop_sensor_name = f"{self.name}:{SENSOR_ENCODER}"
         self.endstop_sensor = MmuVirtualEndstopSensor(config, endstop_sensor_name, None, register=register_as_sensor)
 
         # Register event handlers

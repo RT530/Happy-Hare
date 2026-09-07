@@ -41,12 +41,19 @@ class MmuSensorManager:
         def collect_sensors(pairs):
             return {key: sensor for sensor, key in pairs if sensor}
 
+        # On a single-unit machine the encoder, extruder-entry and toolhead sensors are
+        # registered WITHOUT their "<owner>:" prefix (see MmuEncoder / MmuToolheadWrapper).
+        # Naming is a two-sided contract: the registry keys built here and
+        # get_qualified_endstop_name() below must use the same rule, otherwise a homing
+        # move resolves e.g. "extruder" to "default:extruder" and finds no endstop.
+        single_unit = self.mmu_machine.num_units <= 1
+
         for mmu_unit in self.mmu_machine.units:
 
             sf_buffer = mmu_unit.buffer
             sf_buffer_name = sf_buffer.name if sf_buffer is not None else None
             encoder = mmu_unit.encoder
-            encoder_name = encoder.name if encoder is not None else None
+            encoder_name = encoder.name if encoder is not None and not single_unit else None
             sensor_defs = [
                 (mmu_unit.sensors.shared_exit_sensor, SENSOR_SHARED_EXIT, mmu_unit.name),
                 (sf_buffer.compression_sensor if sf_buffer else None, SENSOR_COMPRESSION, sf_buffer_name),
@@ -61,7 +68,7 @@ class MmuSensorManager:
             ])
 
             prefixed_unit_sensors = collect_sensors([
-                (sensor, self.get_prefixed_sensor_name(sensor_type, name)) if sensor and name else (sensor, None)
+                (sensor, self.get_prefixed_sensor_name(sensor_type, name) if name else sensor_type)
                 for sensor, sensor_type, name in sensor_defs
             ])
 
@@ -336,6 +343,13 @@ class MmuSensorManager:
         if endstop_name in [SENSOR_COMPRESSION, SENSOR_TENSION]:
             if mmu_unit.buffer:
                 return self.get_prefixed_sensor_name(endstop_name, mmu_unit.buffer.name)
+            return endstop_name
+
+        # A single-unit machine registers the encoder, extruder-entry and toolhead sensors
+        # without an owner prefix (MmuEncoder / MmuToolheadWrapper), so resolve to the bare
+        # name there - resolving to "<owner>:name" would look up a sensor that was never
+        # registered and extruder homing would silently find no endstop.
+        if endstop_name in [SENSOR_ENCODER, SENSOR_EXTRUDER_ENTRY, SENSOR_TOOLHEAD] and self.mmu_machine.num_units <= 1:
             return endstop_name
 
         # These have form: "<encoderName>:genericName" (encoder is optional, may not be fitted)

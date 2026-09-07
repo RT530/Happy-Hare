@@ -80,10 +80,17 @@ class MmuToolheadWrapper():
         # --------------------------------------------
         # Setup single extruder (entrance) sensor
         # --------------------------------------------
+        # Single-unit printer customization: drop the "<toolhead>:" prefix only when there's
+        # genuinely one unit - with 2+ units it's still required to keep each toolhead's
+        # sensor name unique (this repo's own multi-unit test fixtures rely on that).
+        extruder_entry_sensor_name = (
+            SENSOR_EXTRUDER_ENTRY if self.mmu_machine.num_units <= 1
+            else f"{self.name}:{SENSOR_EXTRUDER_ENTRY}"
+        )
         switch_pin = config.get('extruder_switch_pin', None)
         sensor = sf.create_mmu_sensor(
             config,
-            f"{self.name}:{SENSOR_EXTRUDER_ENTRY}",
+            extruder_entry_sensor_name,
             None,
             switch_pin,
             event_delay=event_delay,
@@ -96,10 +103,15 @@ class MmuToolheadWrapper():
         # --------------------------------------------
         # Setup single toolhead sensor
         # --------------------------------------------
+        # Same single-unit rule as the extruder entry sensor above.
+        toolhead_sensor_name = (
+            SENSOR_TOOLHEAD if self.mmu_machine.num_units <= 1
+            else f"{self.name}:{SENSOR_TOOLHEAD}"
+        )
         switch_pin = config.get('toolhead_switch_pin', None)
         sensor = sf.create_mmu_sensor(
             config,
-            f"{self.name}:{SENSOR_TOOLHEAD}",
+            toolhead_sensor_name,
             None,
             switch_pin,
             event_delay=event_delay,
