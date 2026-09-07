@@ -129,7 +129,20 @@ class SaveVariableManager:
     def namespace(self, variable, namespace):
         """
         Return a variable name namespaced to an MMU unit (if provided).
+
+        Namespacing is skipped only when the machine genuinely has a single unit
+        (printer-specific customization): with just one unit, the prefix (mmu_xxx ->
+        mmu_<unit>_xxx) adds nothing but noise to every stored variable name. Real
+        multi-unit machines (including this repo's own multi-unit test fixtures - see
+        test/hh/profiles.py's 'ercf_vvd_buffers' and friends) still need the prefix to
+        keep each unit's calibration data from colliding, so this falls through to the
+        original behavior whenever more than one unit is configured. Every get/set/delete
+        call site routes through this one function, so gating it here has the same effect
+        as conditionally passing namespace=None, without editing 20+ call sites across
+        7 files individually.
         """
+        if self.mmu_machine.num_units <= 1:
+            return variable
         if namespace is not None:
             return variable.replace("mmu_", "mmu_%s_" % namespace)
         return variable
