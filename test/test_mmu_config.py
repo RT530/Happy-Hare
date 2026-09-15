@@ -206,7 +206,7 @@ class TestBoxTurtleRender(unittest.TestCase):
     def test_assemble_tolerates_duplicate_extruder_section(self):
         """
         [extruder] appears in both the printer stub (stepper options, which
-        MmuExtruderWrapper needs at extras/mmu/unit/mmu_extruder_wrapper.py:58-59)
+        MmuExtruderWrapper needs at extras/mmu/unit/mmu_extruder_wrapper.py:64-65)
         and mmu_macro_vars.cfg (extrude limits). RawConfigParser(strict=False) must
         merge rather than raise.
         """
@@ -256,7 +256,7 @@ class TestHardwareConfigurationWarnings(unittest.TestCase):
             return cfg._kconfig(name, syms)
 
     def test_missing_shared_heater_name_is_warned(self):
-        syms = dict(profiles.get('qidi').syms)
+        syms = dict(profiles.get('qidi').syms, PARAM_FILAMENT_HEATER='')
         self.assertTrue(self._kconfig('missing_heater_name', syms).is_enabled('W13'))
 
         syms['PARAM_FILAMENT_HEATER'] = 'qidi_heater'
