@@ -156,14 +156,14 @@ class MmuSyncFeedback:
             return "unavailable"
 
         if state is None:
-            # A proportional sensor returns a raw float that is essentially never exactly
-            # 0.0, so a plain sign test can never report neutral. Ask for the discrete
-            # state instead, which the virtual tension/compression sensors already derive.
-            state = self._get_sensor_state(use_virtual_threshold=True)
+            sm = self.mmu.sensor_manager
+            if sm.has_sensor(SENSOR_PROPORTIONAL):
+                # Report the buffer's hysteresis state, independent of controller mode
+                # and whether either derived switch is enabled. Control keeps the raw value.
+                state = sm.get_sensor_obj(SENSOR_PROPORTIONAL).get_virtual_sensor_state()
+            else:
+                state = self._get_sensor_state()
         if (self.mmu.is_enabled and self.p.sync_feedback_enabled and self.active) or detail:
-#            # Polarity varies slightly between modes on proportional sensor so ask controller
-#            polarity = self.ctrl.polarity(state)
-#            return 'compressed' if polarity > 0 else 'tension' if polarity < 0 else 'neutral'
             return 'compressed' if state > 0 else 'tension' if state < 0 else 'neutral'
         elif self.mmu.is_enabled and self.p.sync_feedback_enabled:
             return "inactive"
